@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.*?>
+
+<AnchorPane prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/17.0.2-ea" xmlns:fx="http://javafx.com/fxml/1" fx:controller="LCUManager">
+   <VBox fx:id="vbb" layoutX="32.0" layoutY="77.0" prefHeight="314.0" prefWidth="550.0" />
+   <Text fx:id="ttt" layoutX="206.0" layoutY="47.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Text" />
+</AnchorPane>
