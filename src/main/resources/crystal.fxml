@@ -10,6 +10,7 @@
         <BorderPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
             <top>
                 <Text fx:id="ttt" layoutY="-13.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Text"/>
+                <Text fx:id="ttt2" layoutY="-13.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Text"/>
             </top>
         </BorderPane>
     </Tab>

@@ -28,6 +28,7 @@ import java.net.URI
 import kotlin.system.exitProcess
 
 class LCUManager {
+	lateinit var ttt2: Text
 	val data = FXCollections.observableArrayList<Champion>()
 	lateinit var table: TableView<Champion>
 
@@ -105,7 +106,7 @@ class LCUManager {
 		}
 	}
 
-	private fun initalize_certificate() {
+	private fun initialize_certificate() {
 		val certificate_file = File("riotgames.pem")
 		val certificateFactory = CertificateFactory.getInstance("X.509")
 		val certificate = certificateFactory.generateCertificate(certificate_file.inputStream())
@@ -203,10 +204,18 @@ class LCUManager {
 					if (text == "") continue
 					val data = JsonParser.parseString(text).asJsonArray[2]
 					println(data)
-					if (data.asJsonObject["eventType"].asString == "Create") {
-						champ_select.set(true)
-					} else if (data.asJsonObject["eventType"].asString == "Delete") {
-						champ_select.set(false)
+					when (data.asJsonObject["eventType"].asString) {
+						"Create" -> {
+							champ_select.set(true)
+						}
+						"Delete" -> {
+							champ_select.set(false)
+						}
+						else -> {
+							ttt2.text = get_champ_select().map {
+								champions_map[it]
+							}.toString()
+						}
 					}
 					vbb.children.add(Text(text))
 				}
@@ -259,7 +268,7 @@ class LCUManager {
 
 	fun initialize() {
 		initialize_lockfile()
-		initalize_certificate()
+		initialize_certificate()
 		initialize_websocket_listener()
 		init_1()
 		init_summoner()
