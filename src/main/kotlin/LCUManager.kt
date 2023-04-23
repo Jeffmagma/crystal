@@ -10,6 +10,7 @@ import javafx.beans.property.SimpleBooleanProperty
 import javafx.beans.property.SimpleIntegerProperty
 import javafx.beans.property.SimpleStringProperty
 import javafx.collections.FXCollections
+import javafx.collections.transformation.FilteredList
 import javafx.scene.control.TableColumn
 import java.io.File
 import java.security.cert.CertificateFactory
@@ -19,22 +20,22 @@ import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
-import javafx.scene.layout.VBox
 import javafx.scene.control.TableView
+import javafx.scene.control.TextField
 import javafx.scene.text.Text
 import kotlinx.coroutines.*
 import kotlinx.coroutines.javafx.JavaFx
 import java.net.URI
+import java.util.function.Predicate
 import kotlin.system.exitProcess
 
 class LCUManager {
-	lateinit var ttt2: Text
-	val data = FXCollections.observableArrayList<Champion>()
-	lateinit var table: TableView<Champion>
-
-	// javafx stuff
+	lateinit var search: TextField
+	private val data = FXCollections.observableArrayList<Champion>()
+	private val filtered_date = FilteredList(data)
+	lateinit var champ_select_table: TableView<Champion>
+	lateinit var all_champ_table: TableView<Champion>
 	lateinit var ttt: Text
-	lateinit var vbb: VBox
 
 	private lateinit var ssl_context: SSLContext
 	private lateinit var auth: String
@@ -212,12 +213,10 @@ class LCUManager {
 							champ_select.set(false)
 						}
 						else -> {
-							ttt2.text = get_champ_select().map {
-								champions_map[it]
-							}.toString()
+							val champs = get_champ_select()
+							println(champs.map { champions_map[it] })
 						}
 					}
-					vbb.children.add(Text(text))
 				}
 			}
 		}
@@ -226,7 +225,7 @@ class LCUManager {
 	data class Champion(val id: Int, val name: SimpleStringProperty, val mastery: SimpleIntegerProperty, val challenges: Map<Int, SimpleBooleanProperty>)
 
 	private fun initialize_ui() {
-		table.items = data
+		all_champ_table.items = filtered_date
 		val name_column = TableColumn<Champion, String>("Champion")
 		name_column.setCellValueFactory {
 			it.value.name
@@ -235,7 +234,7 @@ class LCUManager {
 		mastery_column.setCellValueFactory {
 			it.value.mastery.asObject()
 		}
-		table.columns.addAll(name_column, mastery_column)
+		all_champ_table.columns.addAll(name_column, mastery_column)
 
 		challenges_map.forEach { it ->
 			val challenge = it.value
@@ -245,7 +244,13 @@ class LCUManager {
 			column.setCellValueFactory {
 				it.value.challenges[id]
 			}
-			table.columns.add(column)
+			all_champ_table.columns.add(column)
+		}
+
+		search.textProperty().addListener { _, _, value ->
+			filtered_date.predicate = Predicate {
+				it.name.value.contains(value, true)
+			}
 		}
 	}
 
@@ -262,6 +267,7 @@ class LCUManager {
 				val completed = challenge.second.contains(id)
 				challenges[challenge_id] = SimpleBooleanProperty(completed)
 			}
+
 			data.add(Champion(id, SimpleStringProperty(name), SimpleIntegerProperty(mastery), challenges))
 		}
 	}

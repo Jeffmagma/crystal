@@ -4,23 +4,16 @@
 <?import javafx.scene.layout.*?>
 <?import javafx.scene.text.*?>
 
-<TabPane prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/17.0.2-ea"
-         xmlns:fx="http://javafx.com/fxml/1" fx:controller="LCUManager">
-    <Tab text="Current Champ Select">
-        <BorderPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
-            <top>
-                <Text fx:id="ttt" layoutY="-13.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Text"/>
-                <Text fx:id="ttt2" layoutY="-13.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Text"/>
-            </top>
-        </BorderPane>
-    </Tab>
-    <Tab text="All Champions">
-        <BorderPane>
-            <center>
-                <VBox fx:id="vbb" layoutX="32.0" layoutY="77.0" prefHeight="314.0" prefWidth="550.0"/>
-                <TableView prefHeight="262.0" prefWidth="427.0" BorderPane.alignment="CENTER" fx:id="table">
-                </TableView>
-            </center>
-        </BorderPane>
-    </Tab>
-</TabPane>
+<VBox prefHeight="800" prefWidth="1200" xmlns="http://javafx.com/javafx/17.0.2-ea" xmlns:fx="http://javafx.com/fxml/1" fx:controller="LCUManager">
+    <Text fx:id="ttt" layoutY="-13.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Text" />
+
+    <TableView prefHeight="0" fx:id="champ_select_table">
+    </TableView>
+    <HBox prefHeight="0">
+        <Text strokeType="OUTSIDE" strokeWidth="0.0" text="Search"/>
+        <TextField fx:id="search" prefWidth="99999"/>
+    </HBox>
+
+    <TableView fx:id="all_champ_table" prefHeight="99999">
+    </TableView>
+</VBox>
