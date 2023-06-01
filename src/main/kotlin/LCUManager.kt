@@ -11,31 +11,43 @@ import javafx.beans.property.SimpleIntegerProperty
 import javafx.beans.property.SimpleStringProperty
 import javafx.collections.FXCollections
 import javafx.collections.transformation.FilteredList
-import javafx.scene.control.TableColumn
+import javafx.collections.transformation.SortedList
+import javafx.scene.control.*
+import javafx.scene.control.Alert.AlertType
+import javafx.scene.text.Text
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.javafx.JavaFx
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.io.File
+import java.net.URI
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.util.*
+import java.util.function.Predicate
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
-import javafx.scene.control.TableView
-import javafx.scene.control.TextField
-import javafx.scene.text.Text
-import kotlinx.coroutines.*
-import kotlinx.coroutines.javafx.JavaFx
-import java.net.URI
-import java.util.function.Predicate
 import kotlin.system.exitProcess
+
+fun show_error(message: String) {
+	val alert = Alert(AlertType.ERROR)
+	alert.contentText = message
+	alert.headerText = null
+	alert.showAndWait()
+}
 
 class LCUManager {
 	lateinit var search: TextField
 	private val data = FXCollections.observableArrayList<Champion>()
-	private val filtered_date = FilteredList(data)
+	private val filtered_data = FilteredList(data)
+	private val sorted_filtered = SortedList(filtered_data)
 	lateinit var champ_select_table: TableView<Champion>
 	lateinit var all_champ_table: TableView<Champion>
-	lateinit var ttt: Text
+	lateinit var status: Text
+	private var current_champs = listOf<String>()
 
 	private lateinit var ssl_context: SSLContext
 	private lateinit var auth: String
@@ -63,11 +75,18 @@ class LCUManager {
 		return version.asJsonArray[0].asString
 	}
 
-	private fun get_champ_select(): List<Int> {
+	private fun update_champ_select() {
 		val champ_select = get_endpoint("lol-champ-select/v1/session")
 		val bench = champ_select.asJsonObject["benchChampions"].asJsonArray.map { it.asJsonObject["championId"].asInt }
 		val my_team = champ_select.asJsonObject["myTeam"].asJsonArray.map { it.asJsonObject["championId"].asInt }
-		return bench + my_team
+		val champs = bench + my_team
+		current_champs = try {
+			champs.map { champions_map[it]!! }
+		} catch (e: Exception) {
+			listOf("Zyra")
+		}
+		println(current_champs)
+		all_champ_table.sort()
 	}
 
 	private fun init_champions() {
@@ -109,6 +128,10 @@ class LCUManager {
 
 	private fun initialize_certificate() {
 		val certificate_file = File("riotgames.pem")
+		if (!certificate_file.exists()) {
+			show_error("where is riotgames.pem?")
+			exitProcess(1)
+		}
 		val certificateFactory = CertificateFactory.getInstance("X.509")
 		val certificate = certificateFactory.generateCertificate(certificate_file.inputStream())
 
@@ -141,9 +164,9 @@ class LCUManager {
 	private fun init_1() {
 		champ_select.addListener { _, _, value ->
 			if (value) {
-				ttt.text = "Champ select"
+				status.text = "Champ select" + current_champs.joinToString(", ", " (", ")")
 			} else {
-				ttt.text = "Not champ select"
+				status.text = "Not champ select"
 			}
 		}
 		val state = get_client_state()
@@ -156,7 +179,7 @@ class LCUManager {
 	private fun initialize_lockfile() {
 		val lockfile = File("C:\\Riot Games\\League of Legends\\lockfile")
 		if (!lockfile.exists()) {
-			println("lockfile not found, is league running?")
+			show_error("Lockfile not found, is the game running?")
 			exitProcess(1)
 		}
 		val data = lockfile.readLines()[0]
@@ -208,13 +231,13 @@ class LCUManager {
 					when (data.asJsonObject["eventType"].asString) {
 						"Create" -> {
 							champ_select.set(true)
+							update_champ_select()
 						}
 						"Delete" -> {
 							champ_select.set(false)
 						}
 						else -> {
-							val champs = get_champ_select()
-							println(champs.map { champions_map[it] })
+							update_champ_select()
 						}
 					}
 				}
@@ -225,11 +248,29 @@ class LCUManager {
 	data class Champion(val id: Int, val name: SimpleStringProperty, val mastery: SimpleIntegerProperty, val challenges: Map<Int, SimpleBooleanProperty>)
 
 	private fun initialize_ui() {
-		all_champ_table.items = filtered_date
+		all_champ_table.items = sorted_filtered
+		sorted_filtered.comparatorProperty().bind(all_champ_table.comparatorProperty())
 		val name_column = TableColumn<Champion, String>("Champion")
 		name_column.setCellValueFactory {
 			it.value.name
 		}
+		name_column.setComparator { o1, o2 ->
+			val has1 = current_champs.contains(o1)
+			val has2 = current_champs.contains(o2)
+			if (o2.equals("Zyra")) {
+				println("$o1 $o2 $has1 $has2")
+			}
+			if (has1 == has2) {
+				o1.compareTo(o2)
+			} else {
+				if (has2) {
+					1
+				} else {
+					-1
+				}
+			}
+		}
+		all_champ_table.sortOrder.add(name_column)
 		val mastery_column = TableColumn<Champion, Int>("Mastery")
 		mastery_column.setCellValueFactory {
 			it.value.mastery.asObject()
@@ -240,7 +281,12 @@ class LCUManager {
 			val challenge = it.value
 			val id = it.key
 			val name = challenge.first
-			val column = TableColumn<Champion, Boolean>(name)
+			val label = Label(name)
+			label.maxWidth = Double.MAX_VALUE
+			label.tooltip = Tooltip(name)
+			val column = TableColumn<Champion, Boolean>()
+			column.text = ""
+			column.graphic = label
 			column.setCellValueFactory {
 				it.value.challenges[id]
 			}
@@ -248,10 +294,13 @@ class LCUManager {
 		}
 
 		search.textProperty().addListener { _, _, value ->
-			filtered_date.predicate = Predicate {
+			filtered_data.predicate = Predicate {
 				it.name.value.contains(value, true)
 			}
 		}
+
+		champ_select_table.visibleProperty().bind(champ_select)
+		champ_select_table.managedProperty().bind(champ_select_table.visibleProperty())
 	}
 
 	private fun update_ui() {
