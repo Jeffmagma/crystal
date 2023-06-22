@@ -39,7 +39,13 @@ fun show_error(message: String) {
 	alert.showAndWait()
 }
 
-class LCUManager {
+class LeagueData {
+	fun update_challenge_data() {
+
+	}
+}
+
+class CrystalUI {
 	lateinit var search: TextField
 	private val data = FXCollections.observableArrayList<Champion>()
 	private val filtered_data = FilteredList(data)
@@ -54,12 +60,13 @@ class LCUManager {
 	private lateinit var prefix: String
 	private lateinit var port: String
 
-	private var champ_select = SimpleBooleanProperty(false)
+	private var gameflow_phase = SimpleStringProperty("None")
 
 	// champion id -> name
 	private val champions_map = mutableMapOf<Int, String>()
 	// challenge id -> (challenge name, list of champion ids)
-	private val challenges_map = mutableMapOf<Int, Pair<String, List<Int>>>()
+	//private val challenges_map = mutableMapOf<Int, Pair<String, List<Int>>>()
+	private val challenges_list = mutableListOf<Challenge>()
 	// champion id -> mastery level
 	private val masteries_map = mutableMapOf<Int, Int>()
 
@@ -80,10 +87,11 @@ class LCUManager {
 		val bench = champ_select.asJsonObject["benchChampions"].asJsonArray.map { it.asJsonObject["championId"].asInt }
 		val my_team = champ_select.asJsonObject["myTeam"].asJsonArray.map { it.asJsonObject["championId"].asInt }
 		val champs = bench + my_team
+		println(champs)
 		current_champs = try {
 			champs.map { champions_map[it]!! }
 		} catch (e: Exception) {
-			listOf("Zyra")
+			listOf()
 		}
 		println(current_champs)
 		all_champ_table.sort()
@@ -115,13 +123,14 @@ class LCUManager {
 
 	private fun update_challenges() {
 		val challenges = get_endpoint("lol-challenges/v1/challenges/local-player")
-		challenges.asJsonObject.entrySet().forEach {
-			val value = it.value.asJsonObject
+		challenges.asJsonObject.entrySet().forEach { challenge ->
+			val value = challenge.value.asJsonObject
 			if (!value["completedIds"].asJsonArray.isEmpty && value["idListType"].asString == "CHAMPION"
 				&& value["category"].asString != "COLLECTION"
 				&& value["category"].asString != "LEGACY"
 				&& !value["name"].asString.contains("Master")) {
-				challenges_map[it.key.toInt()] = Pair(value["name"].asString, value["completedIds"].asJsonArray.map { it.asInt })
+				challenges_list.add(Challenge(challenge.key.toInt(), value["name"].asString, value["description"].asString, value["completedIds"].asJsonArray.map { it.asInt }))
+				//challenges_map[challenge.key.toInt()] = Pair(value["name"].asString, value["completedIds"].asJsonArray.map { it.asInt })
 			}
 		}
 	}
@@ -157,23 +166,20 @@ class LCUManager {
 	}
 
 	private fun get_client_state(): String {
-		val data = get_endpoint("lol-gameflow/v1/session")
-		return data.asJsonObject["phase"].asString
+		val data = get_endpoint("lol-gameflow/v1/gameflow-phase")
+		return data.asString
 	}
 
 	private fun init_1() {
-		champ_select.addListener { _, _, value ->
-			if (value) {
-				status.text = "Champ select" + current_champs.joinToString(", ", " (", ")")
-			} else {
-				status.text = "Not champ select"
-			}
+		gameflow_phase.addListener { _, _, value ->
+			status.text = value
+			status.text += " " + current_champs.joinToString(", ", " (", ")")
 		}
 		val state = get_client_state()
 		println(state)
 		// invalidate to trigger it, not sure how else to do it
-		champ_select.set(true)
-		champ_select.set(state == "ChampSelect")
+		gameflow_phase.set("asdf")
+		gameflow_phase.set(state)
 	}
 
 	private fun initialize_lockfile() {
@@ -219,25 +225,30 @@ class LCUManager {
 					header("Authorization", "Basic $auth")
 				}
 			) {
+				//send("[5, \"OnJsonApiEvent\"]")
 				send("[5, \"OnJsonApiEvent_lol-champ-select_v1_session\"]")
-				//send("[5, \"OnJsonApiEvent_lol-gameflow_v1_session\"]")
+				send("[5, \"OnJsonApiEvent_lol-gameflow_v1_gameflow-phase\"]")
 				while (true) {
 					val inc = incoming.receive() as Frame.Text
 					val text = inc.readText()
+					print("text:")
 					println(text)
 					if (text == "") continue
-					val data = JsonParser.parseString(text).asJsonArray[2]
-					println(data)
-					when (data.asJsonObject["eventType"].asString) {
-						"Create" -> {
-							champ_select.set(true)
-							update_champ_select()
+					val json = JsonParser.parseString(text)
+					val event_name = json.asJsonArray[1].asString
+					val data = json.asJsonArray[2]
+					when (event_name) {
+						"OnJsonApiEvent_lol-champ-select_v1_session" -> {
+							when (data.asJsonObject["eventType"].asString) {
+								"Update", "Create" -> {
+									update_champ_select()
+								}
+							}
 						}
-						"Delete" -> {
-							champ_select.set(false)
-						}
-						else -> {
-							update_champ_select()
+						"OnJsonApiEvent_lol-gameflow_v1_gameflow-phase" -> {
+							val state = data.asJsonObject["data"].asString
+							println(state)
+							gameflow_phase.set(state)
 						}
 					}
 				}
@@ -246,6 +257,7 @@ class LCUManager {
 	}
 
 	data class Champion(val id: Int, val name: SimpleStringProperty, val mastery: SimpleIntegerProperty, val challenges: Map<Int, SimpleBooleanProperty>)
+	data class Challenge(val id: Int, val name: String, val description: String, val completion: List<Int>)
 
 	private fun initialize_ui() {
 		all_champ_table.items = sorted_filtered
@@ -257,9 +269,6 @@ class LCUManager {
 		name_column.setComparator { o1, o2 ->
 			val has1 = current_champs.contains(o1)
 			val has2 = current_champs.contains(o2)
-			if (o2.equals("Zyra")) {
-				println("$o1 $o2 $has1 $has2")
-			}
 			if (has1 == has2) {
 				o1.compareTo(o2)
 			} else {
@@ -277,18 +286,17 @@ class LCUManager {
 		}
 		all_champ_table.columns.addAll(name_column, mastery_column)
 
-		challenges_map.forEach { it ->
-			val challenge = it.value
-			val id = it.key
-			val name = challenge.first
+		challenges_list.forEach {
+			val description = it.description
+			val name = it.name
 			val label = Label(name)
-			label.maxWidth = Double.MAX_VALUE
-			label.tooltip = Tooltip(name)
+			label.tooltip = Tooltip(description)
 			val column = TableColumn<Champion, Boolean>()
+			column.prefWidth = name.length * 7.0
 			column.text = ""
 			column.graphic = label
-			column.setCellValueFactory {
-				it.value.challenges[id]
+			column.setCellValueFactory { cell ->
+				cell.value.challenges[it.id]
 			}
 			all_champ_table.columns.add(column)
 		}
@@ -299,7 +307,7 @@ class LCUManager {
 			}
 		}
 
-		champ_select_table.visibleProperty().bind(champ_select)
+		champ_select_table.visibleProperty().bind(gameflow_phase.isEqualTo("ChampSelect"))
 		champ_select_table.managedProperty().bind(champ_select_table.visibleProperty())
 	}
 
@@ -310,10 +318,9 @@ class LCUManager {
 			val id = it.key
 			val mastery = masteries_map[id] ?: 0
 			val challenges = mutableMapOf<Int, SimpleBooleanProperty>()
-			challenges_map.forEach {
-				val challenge = it.value
-				val challenge_id = it.key
-				val completed = challenge.second.contains(id)
+			challenges_list.forEach {challenge ->
+				val challenge_id = challenge.id
+				val completed = challenge.completion.contains(id)
 				challenges[challenge_id] = SimpleBooleanProperty(completed)
 			}
 
@@ -324,6 +331,7 @@ class LCUManager {
 	fun initialize() {
 		initialize_lockfile()
 		initialize_certificate()
+		println(get_endpoint("help"))
 		initialize_websocket_listener()
 		init_1()
 		init_summoner()
