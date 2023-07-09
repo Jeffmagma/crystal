@@ -12,6 +12,7 @@ import javafx.beans.property.SimpleStringProperty
 import javafx.collections.FXCollections
 import javafx.collections.transformation.FilteredList
 import javafx.collections.transformation.SortedList
+import javafx.event.ActionEvent
 import javafx.scene.control.*
 import javafx.scene.control.Alert.AlertType
 import javafx.scene.text.Text
@@ -20,7 +21,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.io.BufferedReader
 import java.io.File
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
 import java.net.URI
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
@@ -40,12 +44,43 @@ fun show_error(message: String) {
 }
 
 class LeagueData {
-	fun update_challenge_data() {
+	companion object {
+		// champion id -> name
+		val champions_map = mutableMapOf<Int, String>()
 
+		private fun get_generic(endpoint: String): JsonElement {
+			val urlConnection = URI(endpoint).toURL().openConnection() as HttpsURLConnection
+			urlConnection.requestMethod = "GET"
+
+			return JsonParser.parseReader(urlConnection.inputStream.reader())
+		}
+
+		private fun get_version(): String {
+			val version = get_generic("https://ddragon.leagueoflegends.com/api/versions.json")
+			return version.asJsonArray[0].asString
+		}
+
+		fun init_champions() {
+			val version = get_version()
+			val champions = get_generic("https://ddragon.leagueoflegends.com/cdn/$version/data/en_US/champion.json")
+			champions.asJsonObject["data"].asJsonObject.entrySet().forEach {
+				val champion = it.value.asJsonObject
+				val name = champion["name"].asString
+				val id = champion["key"].asInt
+				champions_map[id] = name
+			}
+		}
+
+		fun update_challenge_data() {
+
+		}
 	}
 }
 
 class CrystalUI {
+	lateinit var setstatus: Button
+	lateinit var message: TextField
+	lateinit var refresh: Button
 	lateinit var search: TextField
 	private val data = FXCollections.observableArrayList<Champion>()
 	private val filtered_data = FilteredList(data)
@@ -62,25 +97,10 @@ class CrystalUI {
 
 	private var gameflow_phase = SimpleStringProperty("None")
 
-	// champion id -> name
-	private val champions_map = mutableMapOf<Int, String>()
-	// challenge id -> (challenge name, list of champion ids)
-	//private val challenges_map = mutableMapOf<Int, Pair<String, List<Int>>>()
+	data class Challenge(val id: Int, val name: String, val description: String, val completion: List<Int>)
 	private val challenges_list = mutableListOf<Challenge>()
 	// champion id -> mastery level
 	private val masteries_map = mutableMapOf<Int, Int>()
-
-	private fun get_generic(endpoint: String): JsonElement {
-		val urlConnection = URI(endpoint).toURL().openConnection() as HttpsURLConnection
-		urlConnection.requestMethod = "GET"
-
-		return JsonParser.parseReader(urlConnection.inputStream.reader())
-	}
-
-	private fun get_version(): String {
-		val version = get_generic("https://ddragon.leagueoflegends.com/api/versions.json")
-		return version.asJsonArray[0].asString
-	}
 
 	private fun update_champ_select() {
 		val champ_select = get_endpoint("lol-champ-select/v1/session")
@@ -89,23 +109,12 @@ class CrystalUI {
 		val champs = bench + my_team
 		println(champs)
 		current_champs = try {
-			champs.map { champions_map[it]!! }
+			champs.map { LeagueData.champions_map[it]!! }
 		} catch (e: Exception) {
 			listOf()
 		}
 		println(current_champs)
 		all_champ_table.sort()
-	}
-
-	private fun init_champions() {
-		val version = get_version()
-		val champions = get_generic("https://ddragon.leagueoflegends.com/cdn/$version/data/en_US/champion.json")
-		champions.asJsonObject["data"].asJsonObject.entrySet().forEach {
-			val champion = it.value.asJsonObject
-			val name = champion["name"].asString
-			val id = champion["key"].asInt
-			champions_map[id] = name
-		}
 	}
 
 	private fun init_summoner(): String {
@@ -130,7 +139,6 @@ class CrystalUI {
 				&& value["category"].asString != "LEGACY"
 				&& !value["name"].asString.contains("Master")) {
 				challenges_list.add(Challenge(challenge.key.toInt(), value["name"].asString, value["description"].asString, value["completedIds"].asJsonArray.map { it.asInt }))
-				//challenges_map[challenge.key.toInt()] = Pair(value["name"].asString, value["completedIds"].asJsonArray.map { it.asInt })
 			}
 		}
 	}
@@ -163,6 +171,42 @@ class CrystalUI {
 		urlConnection.setRequestProperty("Authorization", "Basic $auth")
 
 		return JsonParser.parseReader(urlConnection.inputStream.reader())
+	}
+
+	private fun put_endpoint(endpoint: String, data: String) {
+		val url = "$prefix://127.0.0.1:$port/$endpoint"
+		val connection = URI(url).toURL().openConnection() as HttpsURLConnection
+		connection.sslSocketFactory = ssl_context.socketFactory
+
+		// Set request method to PUT
+		connection.requestMethod = "PUT"
+
+		// Set request headers, if needed
+		connection.setRequestProperty("Content-Type", "application/json")
+		connection.setRequestProperty("Authorization", "Basic $auth")
+
+		// Enable input/output
+		connection.doInput = true
+		connection.doOutput = true
+
+		// Write the request body
+		val outputStreamWriter = OutputStreamWriter(connection.outputStream)
+		outputStreamWriter.write(data)
+		outputStreamWriter.flush()
+
+		// Get the response
+		val responseCode = connection.responseCode
+		val response = StringBuilder()
+		val reader = BufferedReader(InputStreamReader(connection.inputStream))
+		var line: String?
+		while (reader.readLine().also { line = it } != null) {
+			response.append(line)
+		}
+		reader.close()
+
+		// Process the response
+		println("Response Code: $responseCode")
+		println("Response Body: $response")
 	}
 
 	private fun get_client_state(): String {
@@ -256,8 +300,9 @@ class CrystalUI {
 		}
 	}
 
+	// for table rows
 	data class Champion(val id: Int, val name: SimpleStringProperty, val mastery: SimpleIntegerProperty, val challenges: Map<Int, SimpleBooleanProperty>)
-	data class Challenge(val id: Int, val name: String, val description: String, val completion: List<Int>)
+	// just to store data
 
 	private fun initialize_ui() {
 		all_champ_table.items = sorted_filtered
@@ -313,12 +358,12 @@ class CrystalUI {
 
 	private fun update_ui() {
 		data.clear()
-		champions_map.forEach { it ->
-			val name = it.value
-			val id = it.key
+		LeagueData.champions_map.forEach { champion ->
+			val name = champion.value
+			val id = champion.key
 			val mastery = masteries_map[id] ?: 0
 			val challenges = mutableMapOf<Int, SimpleBooleanProperty>()
-			challenges_list.forEach {challenge ->
+			challenges_list.forEach { challenge ->
 				val challenge_id = challenge.id
 				val completed = challenge.completion.contains(id)
 				challenges[challenge_id] = SimpleBooleanProperty(completed)
@@ -328,6 +373,14 @@ class CrystalUI {
 		}
 	}
 
+	fun set_status_message(message: String) {
+		put_endpoint("lol-chat/v1/me", "{\"statusMessage\": \"$message\"}")
+	}
+
+	fun set_status(actionEvent: ActionEvent) {
+		set_status_message(message.text)
+	}
+
 	fun initialize() {
 		initialize_lockfile()
 		initialize_certificate()
@@ -335,10 +388,15 @@ class CrystalUI {
 		initialize_websocket_listener()
 		init_1()
 		init_summoner()
-		init_champions()
+		LeagueData.init_champions()
 		update_masteries()
 		update_challenges()
 		initialize_ui()
+		update_ui()
+	}
+
+	fun refresh_challenges(actionEvent: ActionEvent) {
+		update_challenges()
 		update_ui()
 	}
 }

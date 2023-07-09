@@ -6,18 +6,22 @@
 <?import javafx.scene.text.*?>
 
 <VBox prefHeight="600" prefWidth="1000" xmlns="http://javafx.com/javafx/17.0.2-ea" xmlns:fx="http://javafx.com/fxml/1" fx:controller="CrystalUI">
-    <Text fx:id="status" layoutY="-13.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Text" />
+	<Text fx:id="status" layoutY="-13.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Text"/>
 
-    <TableView fx:id="champ_select_table" prefHeight="0">
-    </TableView>
-    <HBox alignment="CENTER" prefHeight="0" spacing="5.0">
-        <Text strokeType="OUTSIDE" strokeWidth="0.0" text="Search" />
-        <TextField fx:id="search" prefWidth="99999" />
-      <padding>
-         <Insets left="5.0" />
-      </padding>
-    </HBox>
+	<TableView fx:id="champ_select_table" prefHeight="0">
+	</TableView>
 
-    <TableView fx:id="all_champ_table" prefHeight="99999">
-    </TableView>
+	<HBox alignment="CENTER_LEFT" prefHeight="0" spacing="5.0">
+		<Text strokeType="OUTSIDE" strokeWidth="0.0" text="Search"/>
+		<TextField fx:id="search" prefHeight="25.0" maxWidth="999"/>
+		<Button fx:id="refresh" mnemonicParsing="false" onAction="#refresh_challenges" text="⟳"/>
+		<TextField fx:id="message" prefHeight="25.0" maxWidth="999"/>
+		<Button fx:id="setstatus" onAction="#set_status" text="Set Status"/>
+		<padding>
+			<Insets left="5.0"/>
+		</padding>
+	</HBox>
+
+	<TableView fx:id="all_champ_table" prefHeight="99999">
+	</TableView>
 </VBox>

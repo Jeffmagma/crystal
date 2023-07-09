@@ -10,4 +10,4 @@ application that keeps track of your progress on league challenges that require 
 - [ ] split lcu manager and ui into separate classes
 - [ ] add colors / good separation for current champ list
 - [ ] add way to monitor lockfile to see if league is open and automatically re-bind to client
-- [ ] refresh button
+- [x] refresh button
